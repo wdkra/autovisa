@@ -26,15 +26,11 @@ from distutils.log import info
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.service import Service
+from selenium.webdriver.chrome.options import Options
 import requests
 import sys
 import re
 import imgProcess
-
-# def ErrorDisp(errorcode):
-#     str(errorcode)
-#     print("The program is now terminated. The cessation has been included in the ErrorCode(local), which is: " + errorcode)
-#     input('copied?y')
 
 def chooseMode():
     print('1. Shanghai \n2. Kanton(testing purposes)')
@@ -48,6 +44,7 @@ def chooseMode():
     else:
         print('error')
         sys.exit(0)
+
 
 # get info for console jscode
 def getVisaInfo():
@@ -93,7 +90,9 @@ def datepicker(birthDay = '2', birthMonth = '', birthYear = ''):
             break
     day.click()
 
-WebDriver = webdriver.Chrome(service=Service('chromedriver.exe'))
+options = Options()
+options.page_load_strategy = 'eager'
+WebDriver = webdriver.Chrome(service=Service('chromedriver.exe'),options=options)
 
 #wait 3s for the appearance of the element
 WebDriver.implicitly_wait(3)
