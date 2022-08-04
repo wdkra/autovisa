@@ -1,9 +1,8 @@
-# Program: VisaHelper(non-production ready)
-# It is a HALF-AUTO program. NOT full-auto! It ONLY HELPS you with the submission 
-# of the visa appointment form. But you still have to submit the form by YOURSELF 
-# at last. I cannot get any of your information through this program. All your
-# information will be processed locally and submitted ONLY to the German Consulate 
-# Shanghai(/Guangdong if you test it improperly).
+# coding=utf-8
+
+# Das ist kein vollautomatsches Programm!!!
+# Es kann nur dir dabei helfen(nicht fuer dich), die Formulare schneller auszufuellen.
+# Du muss es SELBST einreichen.
 
 # This file is an INTEGRAL part of the program VisaHelper
 
@@ -21,16 +20,20 @@
 #     You should have received a copy of the GNU Affero General Public License
 #     along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-#from argparse import Action
-from distutils.log import info
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.chrome.options import Options
-import requests
+from predict_onnx import Predictonnx
 import sys
 import re
-import imgProcess
+import numpy as np
+import cv2
+# import imgProcess
+import base64
+
+ocr=Predictonnx('models/ocr.onnx','models/ocr.txt')
+
 
 def chooseMode():
     print('1. Shanghai \n2. Kanton(testing purposes)')
@@ -42,11 +45,10 @@ def chooseMode():
         url = 'https://service2.diplo.de/rktermin/extern/appointment_showMonth.do?locationCode=kant&realmId=1004&categoryId=2341&dateStr=27.08.2022'
         return url
     else:
-        print('error')
+        print("no other than '1' or '2'")
         sys.exit(0)
 
-
-# get info for console jscode
+# info for console jscode
 def getVisaInfo():
     with open('C:\\visacode.txt','r',encoding='utf8') as content:
         code = content.read().replace(' ','')
@@ -56,13 +58,17 @@ def getVisaInfo():
             infos.append(info)
         return infos
    
-# download Captcha image and send to imgProcess.py
+# get img base64 from <style>
 def getCaptcha(page):
     img_style = WebDriver.find_element(By.XPATH, "//div[contains(@style,'background:white url')]").get_attribute('style')
     img_data64 = ''.join(''.join(img_style.split('"')[1:2]).split(',')[1:2])
     print(f'img_base64 data: {img_data64}')
-    CaptchaCode = imgProcess.b2img(page, img_data64, 'jpg')
-    print(f'main.py now got the CaptchaCode No. {page}: {CaptchaCode}')
+    img = base64.b64decode(img_data64)
+    img = np.frombuffer(img,np.uint8)
+    img = cv2.imdecode(img,cv2.IMREAD_COLOR)
+    CaptchaCode = ocr(img)[0][0]
+    # CaptchaCode = imgProcess.b2img(page, img_data64, 'jpg')
+    print(f'(main.py)CaptchaCode No. {page}: {CaptchaCode}')
     return CaptchaCode
 
 def fillCaptcha(CaptchaCode, page):
@@ -72,42 +78,30 @@ def fillCaptcha(CaptchaCode, page):
     elif page == '2':
         captcha_id = 'appointment_newAppointmentForm_captchaText'
     else:
-        print("ERROR: The value 'code' for 'fillCaptcha()' cannot be other than '1' or '2'")
+        raise TypeError
     captcha_input = WebDriver.find_element(By.ID, f'{captcha_id}')
     captcha_input.clear()
     print(CaptchaCode)
     captcha_input.send_keys(CaptchaCode)
 
-def datepicker(birthDay = '2', birthMonth = '', birthYear = ''):
-    WebDriver.find_element(By.XPATH, "//input[@id='fields0content']").click()
-    
-    # WebDriver.find_element(By.CSS_SELECTOR, "#ui-datepicker-div > div > div > select > option[value='6']").click()
-    # WebDriver.find_element(By.CSS_SELECTOR, "#ui-datepicker-div > div > div > select > option[value='2005']").click()
-    
-    days = WebDriver.find_elements(By.XPATH, "//div[@id='ui-datepicker-div']/table/tbody/tr/td")
-    for day in days:
-        if str(day.text) == birthDay:
-            break
-    day.click()
+# def datepicker(birthDay):
+#     WebDriver.find_element(By.XPATH, "//input[@id='fields0content']").click()
+#     days = WebDriver.find_elements(By.XPATH, "//div[@id='ui-datepicker-div']/table/tbody/tr/td")
+#     for day in days:
+#         if str(day.text) == birthDay:
+#             break
+#     day.click()
 
 options = Options()
 options.page_load_strategy = 'eager'
 WebDriver = webdriver.Chrome(service=Service('chromedriver.exe'),options=options)
 
-#wait 3s for the appearance of the element
-WebDriver.implicitly_wait(3)
+# wait up to 3s for elements
+WebDriver.implicitly_wait(1)
 
-# consulate kanton -> for testing
 url = chooseMode()
 WebDriver.get(url)
 
-# test autoCaptcha
-# Manual entry is required due to the delayed completion of the autoCaptcha(OCR).
-# CaptchaCode = getCaptcha()
-# captcha_input = WebDriver.find_element(By.ID, 'appointment_captcha_month_captchaText')
-# captcha_input.clear()
-# print(CaptchaCode)
-# captcha_input.send_keys(CaptchaCode)
 fillCaptcha(getCaptcha('1'), '1')
 ifnext = input('y/n')
 if ifnext == 'y':
@@ -116,12 +110,26 @@ if ifnext == 'y':
 else:
     print('keep going anyway~')
 
-# go to date confirmation page
-gototable_1 = WebDriver.find_element(By.CSS_SELECTOR, '#content > div.wrapper > div > div > a.arrow[href]:nth-of-type(1)')
-gototable_1.click()
-print("c1")
+def if_month_bookable():
+    try:
+        table1_entry = WebDriver.find_element(By.CSS_SELECTOR, '#content > div.wrapper > div > div > a.arrow[href]:nth-of-type(1)')
+        return 'Available'
+    except Exception:
+        next_month = WebDriver.find_element(By.XPATH, "//img[@src='images/go-next.gif']")
+        next_month.click()
+        return 'NotAvailable'
 
-# go to appointment form page
+if_bookable = if_month_bookable()
+while True:
+    flag = if_month_bookable()
+    print(flag)
+    if flag == 'Available':
+        gototable_1 = WebDriver.find_element(By.CSS_SELECTOR, '#content > div.wrapper > div > div > a.arrow[href]:nth-of-type(1)')
+        gototable_1.click()
+        print("c1")
+        break
+
+# form
 gototable_2 = WebDriver.find_element(By.CSS_SELECTOR, '#content > div.wrapper > div > div > a.arrow[href]:nth-of-type(1)')
 gototable_2.click()
 print("c2")
@@ -133,14 +141,19 @@ WebDriver.execute_script(f'''
         document.getElementById('appointment_newAppointmentForm_email').value = '{infolist[2]}';
         document.getElementById('appointment_newAppointmentForm_emailrepeat').value = '{infolist[3]}';
         document.getElementById('fields0content').value = '{infolist[4]}';
-        document.getElementById('appointment_newAppointmentForm_fields_1__content').value = '{infolist[5]}';
-        document.getElementById('appointment_newAppointmentForm_fields_2__content').value = 'Schulbesuch / (High) School Attendance';
+        document.getElementById('fields0contenthidden').value = '{infolist[5]}';
+        document.getElementById('appointment_newAppointmentForm_fields_1__content').value = '{infolist[6]}';
         document.getElementById('appointment_newAppointmentForm_fields_3__content').value = '{infolist[7]}';
         document.getElementById('appointment_newAppointmentForm_fields_4__content').checked = true;
         window.scrollTo(1,9999999999)''')
 
-# pick the date
-datepicker()
+if url =='https://service2.diplo.de/rktermin/extern/appointment_showMonth.do?locationCode=shan&realmId=96&categoryId=892&dateStr=28.08.2022':
+    WebDriver.execute_script('''document.getElementById('appointment_newAppointmentForm_fields_2__content').options.selectedIndex = 1''')
+else:
+    WebDriver.execute_script('''document.getElementById('appointment_newAppointmentForm_fields_2__content').value = 'Schulbesuch / (High) School Attendance';''')
+
+# repick the date
+# datepicker(date)
 fillCaptcha(getCaptcha('2'), '2')
 
 print("It is normal if the 'telephone number...' and 'purpose of...' are reversed.")

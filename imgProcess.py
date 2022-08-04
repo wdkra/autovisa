@@ -1,4 +1,4 @@
-# This file is an INTEGRAL part of the program VisaHelper
+# This file is an unnecessary part of the program VisaHelper
 
 #     Copyright (C) 2022  Tom Zhang
 
@@ -18,15 +18,14 @@ import io
 import os
 import base64
 # from PIL import Image
-from autoOCR.autoOCR import autoCaptcha
-
+from OCR.ocr import autoCaptcha
 
 # def analyzeForm(img_data64):
-#     data_f = Image.open(io.BytesIO(base64.b64decode(img_data64.encode())))
+#     imgForm = Image.open(io.BytesIO(base64.b64decode(img_data64.encode())))
 #     print(f'form is {data_f.format}')
-#     return data_f.format
+#     return imgForm.format
 
-def b2img(number, img_data64, imgForm, FriendlyName = 'DELETABLE-after-done_tempCaptchaImg_'):
+def b2img(number, img_data64, imgForm, FriendlyName = 'DELETABLE_tempCaptchaImg_'):
     path_Img = f'C:\\{FriendlyName}{number}.{imgForm}'
     with open(path_Img,'wb') as imgdata:
         imgdata.write(base64.b64decode(img_data64))
